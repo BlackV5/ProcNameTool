@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
+    <!-- 高 DPI 与 DPI 感知已在 app.manifest 中声明，屏蔽 SDK 的重复配置提示 -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+
+    <!-- 产物标识：exe 使用中文名，方便双击使用 -->
+    <AssemblyName>进程名修改工具</AssemblyName>
+    <RootNamespace>ProcNameTool.Gui</RootNamespace>
+    <AssemblyTitle>进程名修改工具</AssemblyTitle>
+    <Description>按进程选择并改名，让任务管理器与监控系统显示指定名称</Description>
+    <Product>ProcNameTool</Product>
+    <Company>ProcNameTool Contributors</Company>
+    <Copyright>Copyright (C) 2026 ProcNameTool Contributors</Copyright>
+    <Version>1.2.0</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
+
+    <!-- 可复现构建 -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+</Project>

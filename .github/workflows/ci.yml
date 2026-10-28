@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  PROJECT: src/ProcNameTool.Gui/ProcNameTool.Gui.csproj
+  APP_NAME: 进程名修改工具
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & Self-test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore "$env:PROJECT"
+
+      - name: Build (Release)
+        run: dotnet build "$env:PROJECT" -c Release --no-restore
+
+      # 自检会走完整链路：复制自身 → 改写 FileDescription → 用 Windows API 回读校验。
+      # 这是本项目的核心不变式，跑不过说明版本资源改写逻辑已经坏了。
+      - name: Self-test
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:GITHUB_WORKSPACE "src/ProcNameTool.Gui/bin/Release/net8.0-windows/$env:APP_NAME.exe"
+          if (-not (Test-Path $exe)) { throw "未找到构建产物：$exe" }
+
+          $report = Join-Path $env:RUNNER_TEMP "selftest.txt"
+          Start-Process -FilePath $exe -ArgumentList '--selftest', $report -Wait
+          Get-Content $report -Encoding UTF8 | Write-Host
+
+          if (-not (Select-String -Path $report -Pattern 'RESULT: OK' -SimpleMatch -Quiet)) {
+            throw "自检未通过，详见上方输出"
+          }
+
+      - name: Publish single-file (self-contained, win-x64)
+        run: >
+          dotnet publish "$env:PROJECT" -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o out
+
+      - name: Package
+        shell: pwsh
+        run: |
+          Get-ChildItem out -Filter *.pdb -Recurse | Remove-Item -Force
+          Compress-Archive -Path "out/$env:APP_NAME.exe" `
+                           -DestinationPath "ProcNameTool-${{ github.ref_name }}-win-x64.zip" -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProcNameTool-win-x64
+          path: ProcNameTool-*-win-x64.zip
+          retention-days: 14
+
+  release:
+    name: Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ProcNameTool-win-x64
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ProcNameTool-*-win-x64.zip
+          generate_release_notes: true
+          draft: false
+          fail_on_unmatched_files: true
